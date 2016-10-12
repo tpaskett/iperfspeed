@@ -1,0 +1,17 @@
+#!/bin/sh
+
+a2enmod cgi > /dev/null 2>&1
+service apache2 restart > /dev/null 2>&1
+
+ssh-keygen -t rsa -C "iperf@speedtest" -f /var/www/html/iperfspeed/speedtest -P "" > /dev/null 2>&1
+
+mv /var/www/html/iperfspeed/speedtest /var/www/html/iperfspeed/speedtest.pem
+
+APACHE_USER=$(ps aux | egrep '(apache|httpd)' | grep -v root | head -n 1 | awk '{print $1}')
+
+chown -R $APACHE_USER:$APACHE_USER /var/www/html/iperfspeed
+chown $APACHE_USER:$APACHE_USER /usr/lib/cgi-bin/iperfspeed
+
+ln -s /var/www/html/iperfspeed /var/www/iperfspeed 2> /dev/null
+
+exit 0
