@@ -110,11 +110,11 @@ sub server {
     $output .= "Server: authenticate\n";
     $chan_server = $ssh2_server->channel();
     $chan_server->blocking(1);
-    #$chan_server->exec('killall iperf && iperf -s &');
-    #$chan_server->exec('iperf -D -s');
+    #$chan_server->exec('killall iperf3 && iperf3 -s &');
+    #$chan_server->exec('iperf3 -D -s');
     $chan_server->shell();
-    $output .= "Server: start iperf\n";
-    print $chan_server "killall iperf;iperf -D -s\n";
+    $output .= "Server: start iperf3\n";
+    print $chan_server "killall iperf3;iperf3 -D -s\n";
     #print "LINE : $_" while <$chan_server>;
     #$chan_server->exec('iperf -s &');
     #$chan_server->send_eof;
@@ -133,8 +133,8 @@ sub client {
     #print $chan_client "iperf -c k7fpv -y C 2>&1\n";
     #sleep(12);
     #print "LINE : $_" while <$chan_client>;
-    $output .= "Client: start iperf\n";
-    $chan_client->exec('iperf -c k7fpv 2>&1');
+    $output .= "Client: start iperf3\n";
+    $chan_client->exec('iperf3 -c k7fpv 2>&1');
     #$chan_client->exec('ls -l');
     #$chan_client->send_eof;
     sleep(12);

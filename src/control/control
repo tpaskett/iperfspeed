@@ -1,5 +1,5 @@
 Package: iperfspeed
-Version: 0.1
+Version: 0.2
 Depends: apache2, libnet-ssh2-perl
 Provides: 
 Source: package/iperfspeed
