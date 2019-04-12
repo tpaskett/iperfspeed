@@ -1,5 +1,5 @@
 #!/bin/sh
 
-mkdir -p /var/www/html/iperfspeed
+mkdir -p /www/iperfspeed
 
 exit 0

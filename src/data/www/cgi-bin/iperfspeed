@@ -1,0 +1,130 @@
+#!/usr/bin/perl
+BEGIN { push @INC, '/www/cgi-bin' }
+
+$| = 1;
+
+my %query;
+
+parse_params();
+
+if ($query{action} eq 'run_client') {
+    print "Access-Control-Allow-Origin: *\r\nContent-type: text/plain\r\n\r\n";
+
+    # TODO scrub $query{server} for injection attacks
+
+    system "iperf3 -c $query{server} 2>&1 > /tmp/iperf-results";
+
+    my $output;
+
+    open(RESULT, "/tmp/iperf-results");
+    while (<RESULT>) {
+        $output .= $_;
+    }
+    close(RESULT);
+
+    #if ($output =~ /([-+]?[0-9]*\.?[0-9]*\s\w+)\/sec.*sender\n/) {
+    #    $output .= "$1\n";
+    #}
+
+    print $output;
+} elsif ($query{action} eq 'start_server') {
+    print "Access-Control-Allow-Origin: *\r\nContent-type: text/plain\r\n\r\nOK";
+    system "killall iperf3;iperf3 -D -s";
+} elsif ($query{action} eq 'stop_server') {
+    print "Access-Control-Allow-Origin: *\r\nContent-type: text/plain\r\n\r\nOK";
+    system "killall iperf3";
+} elsif ($query{action} eq 'previous_tests') {
+    previous_tests();
+} elsif ($query{action} eq 'test_results') {
+    test_results();
+} elsif ($query{action} eq 'nodes') {
+    nodes();
+} else {
+    print "Content-type:text\r\n\r\n";
+    print "No action\n";
+}
+
+sub parse_params {
+    my $post_data;
+
+    if ( length( $ENV{'QUERY_STRING'} ) > 0 ) {
+        $post_data = $ENV{'QUERY_STRING'};
+    }
+    else {
+        foreach my $data (<STDIN>) {
+            $post_data .= $data;
+        }
+    }
+
+    if ( length($post_data) > 0 ) {
+        $buffer = $post_data;
+        @pairs = split( /&/, $buffer );
+        foreach $pair (@pairs) {
+            ( $name, $value ) = split( /=/, $pair );
+            $value =~ s/\+/ /g;
+            $value =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+            $query{$name} = $value;
+        }
+    }
+}
+
+sub test_results {
+    open(LOG, ">>/www/iperfspeed/tests.log");
+    print LOG time() . "\t$query{server}\t$query{client}\t$query{result}/sec\n";
+    close(LOG);
+
+    print "Content-type:text\r\n\r\n";
+    print "OK\n";
+}
+
+sub nodes {
+    my $json = '[';
+
+    foreach (`grep -i "/iperfspeed|" /var/run/services_olsr`) {
+        chomp;
+        if ( $_ =~ /^http:\/\/(.*)\:(\d+)\// ) {
+            if ( $2 == 8080 ) {
+                $json .= '{"node":"' . lc($1) . '"},';
+            }
+        }
+    }
+
+    chop($json);
+
+    $json .= "]";
+
+    print "Content-type:application/json\r\n\r\n";
+
+    print $json;
+}
+
+sub previous_tests {
+    my $json = '[';
+
+    my @lines;
+
+    open(LOG, "/www/iperfspeed/tests.log");
+    while (<LOG>) {
+        my $line = $_;
+        chomp($line);
+        push(@lines, $line);
+    }
+    close(LOG);
+
+    @lines = reverse(@lines);
+
+    foreach my $line (@lines) {
+        my @parts = split(/\t/, $line);
+        $json .= '{"epoch":' . $parts[0] . ',"server":"' . $parts[1] . '","client":"' . $parts[2] . '","result":"' . $parts[3] . '"},';
+    }
+
+    chop($json);
+
+    $json .= "]";
+
+    print "Content-type:application/json\r\n\r\n";
+
+    print $json;
+}
+
+

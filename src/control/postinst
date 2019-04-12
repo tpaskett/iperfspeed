@@ -1,17 +1,28 @@
 #!/bin/sh
 
-a2enmod cgi > /dev/null 2>&1
-service apache2 restart > /dev/null 2>&1
+grep "|8080|iperfspeed" /etc/config.mesh/_setup.services.dmz &> /dev/null
+DMZPRESENT=$?
+grep "|8080|iperfspeed" /etc/config.mesh/_setup.services.nat &> /dev/null
+NATPRESENT=$?
+NODEMODE=$(uci -q -c /etc/local/uci/ get hsmmmesh.settings.config)
 
-ssh-keygen -t rsa -C "iperf@speedtest" -f /var/www/html/iperfspeed/speedtest -P "" > /dev/null 2>&1
+if [ "$DMZPRESENT" != 0 ]; then
+  echo "IperfSpeed|1|http|$(uname -n)|8080|iperfspeed" >> /etc/config.mesh/_setup.services.dmz
+fi
 
-mv /var/www/html/iperfspeed/speedtest /var/www/html/iperfspeed/speedtest.pem
+if [ "$NATPRESENT" != 0 ]; then
+  echo "IperfSpeed|1|http|$(uname -n)|8080|iperfspeed" >> /etc/config.mesh/_setup.services.nat
+fi
 
-APACHE_USER=$(ps aux | egrep '(apache|httpd)' | grep -v root | head -n 1 | awk '{print $1}')
+if [ "$NODEMODE" = "mesh" ]; then
+  echo "Applying service announcement"
+  /usr/local/bin/node-setup -a -p mesh &> /dev/null
+  /etc/init.d/olsrd restart &> /dev/null
+  echo "<br>"
+fi
 
-chown -R $APACHE_USER:$APACHE_USER /var/www/html/iperfspeed
-chown $APACHE_USER:$APACHE_USER /usr/lib/cgi-bin/iperfspeed
-
-ln -s /var/www/html/iperfspeed /var/www/iperfspeed 2> /dev/null
+echo "Iperf Speed has been setup at http://$(uname -n):8080/iperfspeed"
+echo "<br>"
+echo "An advertised service has been added for Iperf Speed on the Services configuration page"
 
 exit 0
