@@ -1,0 +1,149 @@
+#!/usr/bin/perl
+
+use Net::SSH2;
+
+my $ssh2_server = Net::SSH2->new();
+my $ssh2_client = Net::SSH2->new();
+
+my $chan_server;
+my $chan_client;
+
+$| = 1;
+
+my %query;
+
+parse_params();
+
+my $server = $query{server} || $ARGV[0];
+my $client = $query{client} || $ARGV[1];
+
+my $pub_key = '/var/www/html/iperfspeed/speedtest.pub';
+my $priv_key = '/var/www/html/iperfspeed/speedtest.pem';
+
+$ssh2_server->timeout(30000);
+$ssh2_client->timeout(30000);
+
+my $output = '';
+
+if ($query{action} eq 'run_test') {
+    $output .= "Content-type: text/plain\r\n\r\n";
+
+    server();
+    client();
+
+    print STDERR $output;
+
+    if ($output =~ /(\d*\.\d*\s\w+)\/sec$/) {
+        open(LOG, ">>/var/www/html/iperfspeed/tests.log");
+        print LOG time() . "\t$server\t$client\t$1/sec\n";
+        close(LOG);
+    }
+
+    print $output;
+
+    $ssh2_server->disconnect();
+    $ssh2_client->disconnect();
+} elsif ($query{action} eq 'previous_tests') {
+    previous_tests();
+} else {
+    print "Content-type:text\r\n\r\n";
+    print "No action\n";
+}
+
+sub parse_params {
+    my $post_data;
+
+    if ( length( $ENV{'QUERY_STRING'} ) > 0 ) {
+        $post_data = $ENV{'QUERY_STRING'};
+    }
+    else {
+        foreach my $data (<STDIN>) {
+            $post_data .= $data;
+        }
+    }
+
+    if ( length($post_data) > 0 ) {
+        $buffer = $post_data;
+        @pairs = split( /&/, $buffer );
+        foreach $pair (@pairs) {
+            ( $name, $value ) = split( /=/, $pair );
+            $value =~ s/\+/ /g;
+            $value =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+            $query{$name} = $value;
+        }
+    }
+}
+
+sub previous_tests {
+    my $json = '[';
+
+    my @lines;
+
+    open(LOG, "/var/www/html/iperfspeed/tests.log");
+    while (<LOG>) {
+        my $line = $_;
+        chomp($line);
+        push(@lines, $line);
+    }
+    close(LOG);
+
+    @lines = reverse(@lines);
+
+    foreach my $line (@lines) {
+        my @parts = split(/\t/, $line);
+        $json .= '{"epoch":' . $parts[0] . ',"server":"' . $parts[1] . '","client":"' . $parts[2] . '","result":"' . $parts[3] . '"},';
+    }
+
+    chop($json);
+
+    $json .= "]";
+
+    print "Content-type:application/json\r\n\r\n";
+
+    print $json;
+}
+
+sub server {    
+    $ssh2_server->connect($server, '2222') or die "Unable to connect Host $@ \n";
+    $output .= "Server: connected to $server\n";
+    $ssh2_server->auth_publickey('root', $pub_key, $priv_key);
+    $output .= "Server: authenticate\n";
+    $chan_server = $ssh2_server->channel();
+    $chan_server->blocking(1);
+    #$chan_server->exec('killall iperf3 && iperf3 -s &');
+    #$chan_server->exec('iperf3 -D -s');
+    $chan_server->shell();
+    $output .= "Server: start iperf3\n";
+    print $chan_server "killall iperf3;iperf3 -D -s\n";
+    #print "LINE : $_" while <$chan_server>;
+    #$chan_server->exec('iperf -s &');
+    #$chan_server->send_eof;
+    #while (<$chan_server>){ print }
+}
+
+sub client {
+    $ssh2_client->connect($client, '2222') or die "Unable to connect Host $@ \n";
+    $output .= "Client: connected to $client\n";
+    $ssh2_client->auth_publickey('root', $pub_key, $priv_key);
+    $output .= "Server: authenticate\n";
+    $chan_client = $ssh2_client->channel();
+    $chan_client->blocking(1);
+    
+    #$chan_client->shell();
+    #print $chan_client "iperf -c k7fpv -y C 2>&1\n";
+    #sleep(12);
+    #print "LINE : $_" while <$chan_client>;
+    $output .= "Client: start iperf3\n";
+    $chan_client->exec('iperf3 -c k7fpv 2>&1');
+    #$chan_client->exec('ls -l');
+    #$chan_client->send_eof;
+    sleep(12);
+    my $result;
+    while (<$chan_client>){ $result .= $_ }
+    $output .= $result;
+    my $iperf = split(/,/, $result);
+}
+
+
+#$chan_server->exec('killall iperf');
+
