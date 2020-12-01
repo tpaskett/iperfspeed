@@ -11,22 +11,26 @@ if ($query{action} eq 'run_client') {
     print "Access-Control-Allow-Origin: *\r\nContent-type: text/plain\r\n\r\n";
 
     # TODO scrub $query{server} for injection attacks
+	if (not $query{server} =~ /^[a-zA-Z0-9\.\-]+$/ ) {
+		print "Content-type:text\r\n\r\n";
+		print "Invalid Request\n";
+	} else {
+		system "iperf3 -c $query{server} 2>&1 > /tmp/iperf-results";
 
-    system "iperf3 -c $query{server} 2>&1 > /tmp/iperf-results";
+		my $output;
 
-    my $output;
+		open(RESULT, "/tmp/iperf-results");
+		while (<RESULT>) {
+			$output .= $_;
+		}
+		close(RESULT);
 
-    open(RESULT, "/tmp/iperf-results");
-    while (<RESULT>) {
-        $output .= $_;
-    }
-    close(RESULT);
+		#if ($output =~ /([-+]?[0-9]*\.?[0-9]*\s\w+)\/sec.*sender\n/) {
+		#    $output .= "$1\n";
+		#}
 
-    #if ($output =~ /([-+]?[0-9]*\.?[0-9]*\s\w+)\/sec.*sender\n/) {
-    #    $output .= "$1\n";
-    #}
-
-    print $output;
+		print $output;
+	}
 } elsif ($query{action} eq 'start_server') {
     print "Access-Control-Allow-Origin: *\r\nContent-type: text/plain\r\n\r\nOK";
     system "killall iperf3;iperf3 -D -s";
