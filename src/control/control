@@ -1,5 +1,5 @@
 Package: iperfspeed
-Version: 0.5
+Version: 0.5.1
 Depends: iperf3
 Provides:
 Source: package/iperfspeed
